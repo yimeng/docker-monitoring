@@ -1,0 +1,13 @@
+modules:
+  http_2xx:
+    prober: http
+  tcp_connect:
+    prober: tcp
+  ssh_banner:
+    prober: tcp
+    tcp:
+      query_response:
+      - expect: "^SSH-2.0-"
+      - send: "SSH-2.0-blackbox-ssh-check"
+  icmp:
+    prober: icmp

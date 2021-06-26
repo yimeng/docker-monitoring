@@ -1,0 +1,99 @@
+version: '3.6'
+volumes:
+    prometheus_data: {}
+    grafana_data: {}
+services:
+  prometheus:
+    build:
+      dockerfile: Dockerfile
+      context: prometheus/server
+    container_name: prometheus
+    hostname: prometheus
+    ports:
+      - 9100:9100
+      - 9090:9090
+    restart: unless-stopped
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter
+    container_name: blackbox
+    restart: unless-stopped
+    ports:
+      - "9116:9115"
+#    networks:
+#      - monitor-net
+ 
+
+  traefik:
+    image: "traefik:v2.4"
+    container_name: "traefik"
+    command:
+      # - "--log.level=DEBUG"
+      # - "--entrypoints.web.address=:80"
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
+      - "--certificatesresolvers.myresolver.acme.caserver=https://acme-staging-v02.api.letsencrypt.org/directory"
+      - "--certificatesresolvers.myresolver.acme.email=2doit@example.com"
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "443:443"
+      # - "80:80"
+      - "8080:8080"
+    volumes:
+      - "./letsencrypt:/letsencrypt"
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+
+  whoami:
+    image: "traefik/whoami"
+    container_name: "simple-service"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.whoami.rule=Host(`whoami.cloudwise.2doit.net`)"
+      - "traefik.http.routers.whoami.entrypoints=websecure"
+      - "traefik.http.routers.whoami.tls.certresolver=myresolver"
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=${ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    restart: unless-stopped
+    expose:
+      - 3000
+    ports:
+      - 3000:3000
+#    networks:
+#      - monitor-net 
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Host(`grafana.cloudwise.2doit.net`)"
+      # - "traefik.http.routers.grafana.entrypoints=web"
+      - "traefik.http.routers.www-router-http.service=grafana"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+      - "traefik.http.routers.grafana-https.tls=true"
+      - "traefik.http.routers.admin-router.entrypoints=websecure"
+      - "traefik.http.routers.admin-router.tls=true"
+      # - "traefik.http.routers.admin-router.tls.certresolver=acmeresolver"
+
+
+
+  gitea:
+    image: gitea/gitea
+    container_name: gitea
+    environment:
+      - USER_UID=1000
+      - USER_GID=1000
+    restart: always
+    volumes:
+      - ./gitea:/data
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    ports:
+      - "3000:3000"
+      - "222:22"
+
